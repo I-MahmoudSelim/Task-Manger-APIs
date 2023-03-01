@@ -1,5 +1,5 @@
 class myError extends Error {
-    constructor(status = 500, message = "There is something wrong!") {
+    constructor(status = 400, message = "Bad request") {
         super()
         this.message = message;
         this.status = status;

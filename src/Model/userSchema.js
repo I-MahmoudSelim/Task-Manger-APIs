@@ -3,6 +3,7 @@ const validator = require("validator");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const Task = require("./taskSchema");
+const myError = require("./myError");
 
 const userSchema = new mongoose.Schema({
     userName: {
@@ -11,7 +12,6 @@ const userSchema = new mongoose.Schema({
         trim: true,
         lowercase: true,
         unique: true,
-
     },
     name: {
         type: String,
@@ -26,7 +26,7 @@ const userSchema = new mongoose.Schema({
         unique: true,
         validate(e) {
             if (!validator.isEmail(e)) {
-                throw new Error("It is not valid e-mail")
+                throw new myError(403, "It is not valid e-mail")
             }
         },
     },
@@ -35,18 +35,9 @@ const userSchema = new mongoose.Schema({
         required: true,
         trim: true,
         minLength: 7,
-        set(p) {
-            let x = bcrypt.getRounds(p)
-            if (isNaN(x)) { x = 0 };
-            if (8 - x > 0) {
-                p = bcrypt.hashSync(p, 8 - x);
-                return p
-            }
-            return p;
-        },
         validate(p) {
             if (p.toLowerCase().includes("password")) {
-                throw new Error("Your password cannot include 'password'")
+                throw new myError(403, "Your password cannot include 'password'")
             }
         }
     },
@@ -75,16 +66,15 @@ const userSchema = new mongoose.Schema({
         },
         logIn: async function (email, password) {
             let user;
+
             if (validator.isEmail(email)) {
                 user = await this.findOne({ email: email.toLowerCase() })
             } else {
                 user = await this.findByUN(email.toLowerCase())
             }
 
-            if (!user) {
-                throw new Error("wrong password or email1")
-            } else if (!await bcrypt.compare(password, user.password)) {
-                throw new Error("wrong password or email2")
+            if (!user || !await bcrypt.compare(password, user.password)) {
+                throw new myError(404, "wrong password or email")
             }
             return user;
         },
@@ -106,7 +96,7 @@ const userSchema = new mongoose.Schema({
     },
     methods: {
         toJSON() {
-            const user = this.toObject()
+            let user = this.toObject()
             delete user.password;
             delete user.tokens;
             delete user._id;
@@ -115,7 +105,11 @@ const userSchema = new mongoose.Schema({
             return user
         },
         generateAuthToken: async function () {
-            const token = jwt.sign({ id: this._id.toString() }, "MahmoudSelim", { expiresIn: "2h" });
+            let user = this.toObject()
+            delete user.password;
+            delete user.tokens;
+            delete user.__v;
+            const token = jwt.sign(user, process.env.JWT_SECRET, { expiresIn: "2h" });
             this.tokens.push({ token });
             await this.save()
             return token;
@@ -137,6 +131,14 @@ userSchema.virtual('tasks', {
     ref: 'Task',
     localField: '_id',
     foreignField: "creator"
+})
+
+userSchema.pre('save', async function (next) {
+    const user = this
+    if (user.isModified('password')) {
+        user.password = await bcrypt.hash(user.password, 8)
+    }
+    next()
 })
 
 userSchema.pre("remove", async function (next) {

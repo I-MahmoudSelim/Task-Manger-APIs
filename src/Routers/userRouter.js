@@ -46,9 +46,9 @@ router.post("/users", handler(async (req, res) => {
 router.post("/users/login", handler(async (req, res) => {
 
     const user = await User.logIn(req.body.email, req.body.password)
-    if (!user) {
-        res.status(404).send("There is no user with this id")
-    }
+    // if (!user) {
+    //     res.status(404).send("There is no user with this id")
+    // }
     const token = await user.generateAuthToken()
 
     res.status(200).json({ user, token })
@@ -60,7 +60,6 @@ router.post("/users/login", handler(async (req, res) => {
 router.post("/users/logout", auth, handler(async (req, res) => {
     await User.logOut(req.user, req.token)
     res.status(200).send()
-
 }))
 
 // Log Out from other sessions 
@@ -139,8 +138,8 @@ router.patch("/users/me", auth, handler(async (req, res) => {
 // ____________________________________________________________
 router.delete("/users/me", auth, handler(async (req, res) => {
 
-    // await User.findByIdAndDelete(req.user._id)
-    req.user.remove()
+    await User.findByIdAndDelete(req.user._id)
+    // req.user.remove()
     sendCancelEmail(req.user.email, req.user.name);
     res.status(200).send()
 
