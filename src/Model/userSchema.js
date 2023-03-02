@@ -79,16 +79,18 @@ const userSchema = new mongoose.Schema({
             return user;
         },
         logOut: async function (user, token) {
-            user.tokens = user.tokens.filter((tokens) => {
+            let theUser = await this.findByUN(user.userName)
+            theUser.tokens = theUser.tokens.filter((tokens) => {
                 return tokens.token !== token;
             })
-            await user.save()
+            await theUser.save()
         },
         deleteOthersUsers: async function (user, token) {
-            user.tokens = user.tokens.filter((tokens) => {
+            let theUser = await this.findByUN(user.userName)
+            theUser.tokens = theUser.tokens.filter((tokens) => {
                 return tokens.token === token;
             })
-            await user.save()
+            return await theUser.save()
         },
         findByUN: async function (UN) {
             return await this.findOne({ userName: UN })

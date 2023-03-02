@@ -57,17 +57,17 @@ router.post("/users/login", handler(async (req, res) => {
 
 // Log Out 
 // _________________________________________________________
-router.post("/users/logout", auth, handler(async (req, res) => {
+router.post("/users/me/logout", auth, handler(async (req, res) => {
     await User.logOut(req.user, req.token)
     res.status(200).send()
 }))
 
 // Log Out from other sessions 
 // _________________________________________________________
-router.post("/users/logoutall", auth, handler(async (req, res) => {
+router.post("/users/me/logoutall", auth, handler(async (req, res) => {
 
-    await User.deleteOthersUsers(req.user, req.token)
-    res.status(200).send()
+    const user = await User.deleteOthersUsers(req.user, req.token)
+    res.status(200).send(user)
 
 }))
 
@@ -80,13 +80,12 @@ router.get("/users/me", auth, handler(async (req, res) => {
 //search user by property users
 // ____________________________________________________________
 router.get("/users/find", auth, handler(async (req, res) => {
-
-    if (!req.query) {
-        res.status(404).send("No query, no results.")
+    if (Object.keys(req.query).length === 0) {
+        throw new myError(404, "No query, no results.")
     }
     const data = await User.find(req.query)
-    if (!data) {
-        res.status(404).send(`There is no user with this ${req.query}`)
+    if (data.length === 0) {
+        throw new myError(404, `There is no user with this ${req.query}`)
     }
     const newData = data.map((user) => {
         return user.toJSON();
@@ -111,24 +110,30 @@ router.get("/users/:UN", auth, handler(async (req, res) => {
 // ____________________________________________________________
 router.patch("/users/me", auth, handler(async (req, res) => {
 
+    const user = await User.findByUN(req.user.userName)
     // const user = await User.findByIdAndUpdate(req.user.userName, req.body, { new: true, runValidators: true }))
     const updates = Object.keys(req.body)
+
+    if (updates.length === 0) {
+        throw new myError(400, "there is no updates")
+    };
+
     const mutables = ["userName", "name", "age", "email", "password"];
     const isValidated = updates.every(update => mutables.includes(update));
     if (!isValidated) {
-        res.status(400).send("unaccepted updates")
+        throw new myError(403, "unaccepted updates")
     }
     if (updates.includes("email")) {
-        req.user.isActivated = false;
+        user.isActivated = false;
         // 
         // send activation email
         // 
     }
     for (const update of updates) {
-        req.user[update] = req.body[update];
+        user[update] = req.body[update];
     }
-    await req.user.save();
-    res.status(200).send(req.user)
+    await user.save();
+    res.status(200).send(user)
 
 }))
 
@@ -147,17 +152,30 @@ router.delete("/users/me", auth, handler(async (req, res) => {
 
 // POST router to upload profile avatar
 // _________________________________________________________
-router.post("/users/me/avatar", auth, upload.single("avatar"), handler(async (req, res) => {
+router.post("/users/me/avatar", auth, handler(upload.single("avatar")), handler(async (req, res) => {
+    const user = await User.findByUN(req.user.userName)
     const buffer = await sharp(req.file.buffer).png().resize({ width: 250, height: 250 }).toBuffer()
-    req.user.avatar = buffer;
-    await req.user.save()
-    res.status(200).send(req.user)
+    user.avatar = buffer;
+    await user.save()
+    res.status(200).send(user)
 }))
 
-router.delete("/users/me/avatar", auth, upload.single("avatar"), handler(async (req, res) => {
-    req.user.avatar = undefined;
-    await req.user.save()
-    res.status(200).send(req.user)
+router.delete("/users/me/avatar", auth, handler(upload.single("avatar")), handler(async (req, res) => {
+
+    const user = await User.findByUN(req.user.userName)
+    if (!user.avatar) {
+        res.status(200).send(user)
+    }
+    user.avatar = undefined;
+    await user.save()
+    res.status(200).send(user)
+}))
+
+router.get("/users/me/avatar", auth, handler(upload.single("avatar")), handler(async (req, res) => {
+    if (req.user.avatar) {
+        throw new myError(404, "avatar unfounded")
+    }
+    res.status(200).set("Content-Type", "image/jpg").send(req.user.avatar)
 }))
 
 router.get("/users/:id/avatar", handler(async (req, res) => {

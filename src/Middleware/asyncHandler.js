@@ -3,6 +3,7 @@ module.exports = function (fn) {
         try {
             await fn(req, res, next)
         } catch (err) {
+            // console.log(err)
             if (err.status) {
                 res.status(err.status).send({ error: err.message })
             } else {
